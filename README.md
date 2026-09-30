@@ -1,9 +1,15 @@
-# pi-wrapper-modules
+# pi-nix-wrapper
 
 A [`nix-wrapper-modules`](https://github.com/BirdeeHub/nix-wrapper-modules)
 module for [Pi](https://pi.dev), a terminal coding agent.
 
-The flake exports:
+> [!NOTE]
+> This project is in its private bootstrap phase. The current implementation is
+> a working foundation, but its public API is still provisional. See
+> [the project intent and architecture](docs/intent.md) for goals, design
+> constraints, proposed milestones, and open decisions.
+
+The flake currently exports:
 
 - `wrapperModules.pi`: the unevaluated, reusable wrapper module;
 - `wrappers.pi`: the partially evaluated wrapper with `.wrap`, `.apply`, and
@@ -29,7 +35,7 @@ Apply the exported overlay to the package set passed to `.wrap`:
 
 ```nix
 {
-  inputs.pi-wrapper-modules.url = "github:YOUR-ORG/pi-wrapper-modules";
+  inputs.pi-wrapper-modules.url = "github:mp-complete/pi-nix-wrapper";
 
   outputs =
     { nixpkgs, pi-wrapper-modules, ... }:
