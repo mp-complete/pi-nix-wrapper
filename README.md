@@ -105,7 +105,10 @@ is enabled, so that combination is an evaluation error.
 `tools.allow`, `tools.exclude`, `tools.builtin`, and `tools.enable` map to
 `--tools`, `--exclude-tools`, `--no-builtin-tools`, and `--no-tools`.
 `tools.allow` replaces Pi's selection, so name every tool to enable; an empty
-list disables all tools. `tools.packages` appends Nix packages to Pi's `PATH`
+list disables all tools. `tools.enable = false` rejects a non-empty allowlist
+at evaluation time. `tools.builtin = false` only disables Pi's default
+built-in selection; an explicit `tools.allow` entry may still name a built-in
+tool to enable it. `tools.packages` appends Nix packages to Pi's `PATH`
 for the `bash` tool, `!` commands, extensions, and stdio MCP servers.
 
 Pi is versioned by Nix, so the wrapper sets `PI_SKIP_VERSION_CHECK=1` and, by
@@ -162,11 +165,12 @@ mcpServers = {
 ```
 
 The wrapper loads a generated extension that registers these servers with
-`pi.registerMcpServer()` on every load. It never writes `mcp.json`, so
-servers added ad hoc with `pi mcp add` stay in the user's writable file and
-connect next to the declared ones. A server of the same name in `mcp.json`
-takes precedence, which also allows a per-machine override such as
-`"enabled": false`.
+`pi.registerMcpServer()` on every load. Values are validated during Nix
+evaluation for the selected transport and common field types before the
+wrapper is generated. It never writes `mcp.json`, so servers added ad hoc
+with `pi mcp add` stay in the user's writable file and connect next to the
+declared ones. A server of the same name in `mcp.json` takes precedence,
+which also allows a per-machine override such as `"enabled": false`.
 
 - Secrets: values are stored in the Nix store. Use Pi's runtime interpolation
   (`${NAME}` or a leading `!command`) in `env`, `headers`, and
@@ -213,13 +217,13 @@ option when wrapping.
 | `resourceDiscovery.themes` | boolean | Toggle ambient theme discovery |
 | `resourceDiscovery.contextFiles` | boolean | Toggle `AGENTS.md` and `CLAUDE.md` discovery |
 | `builtinExtensions.{mcp,codemode,toolSearch,llamaCpp}` | boolean | Keep built-ins when extension discovery is disabled |
-| `tools.enable` | boolean | `false` emits `--no-tools` |
-| `tools.builtin` | boolean | `false` emits `--no-builtin-tools` |
+| `tools.enable` | boolean | `false` emits `--no-tools`; cannot be combined with a non-empty `tools.allow` |
+| `tools.builtin` | boolean | `false` emits `--no-builtin-tools`, but `tools.allow` may still explicitly name a built-in tool |
 | `tools.allow` | null or list of strings | Set the `--tools` allowlist |
 | `tools.exclude` | list of strings | Set `--exclude-tools` |
 | `tools.packages` | list of packages | Append executables to `PATH` |
 | `offline` | boolean (default `true`) | Set `PI_OFFLINE=1` if unset |
-| `mcpServers` | attribute set of JSON values | Register MCP servers through a generated extension |
+| `mcpServers` | attribute set of JSON values | Register and validate MCP servers through a generated extension |
 | `configDir` | null or string | Set `PI_CODING_AGENT_DIR` if unset; defaults per wrapper name |
 | `sessionDir` | null or string | Set `PI_CODING_AGENT_SESSION_DIR` if unset |
 
