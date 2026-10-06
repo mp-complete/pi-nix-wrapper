@@ -542,6 +542,63 @@
                   mcpServers."bad name".url = "https://example.invalid/mcp";
                 }).outPath
               ).success;
+            assert
+              !(builtins.tryEval
+                (wrapper.config.wrap {
+                  inherit pkgs;
+                  mcpServers.bad = null;
+                }).outPath
+              ).success;
+            assert
+              !(builtins.tryEval
+                (wrapper.config.wrap {
+                  inherit pkgs;
+                  mcpServers.bad = { };
+                }).outPath
+              ).success;
+            assert
+              !(builtins.tryEval
+                (wrapper.config.wrap {
+                  inherit pkgs;
+                  mcpServers.bad = {
+                    command = "echo";
+                    url = "https://example.invalid/mcp";
+                  };
+                }).outPath
+              ).success;
+            assert
+              !(builtins.tryEval
+                (wrapper.config.wrap {
+                  inherit pkgs;
+                  mcpServers.bad = {
+                    command = "echo";
+                    args = [ 1 ];
+                  };
+                }).outPath
+              ).success;
+            assert
+              !(builtins.tryEval
+                (wrapper.config.wrap {
+                  inherit pkgs;
+                  mcpServers.bad = {
+                    url = "https://example.invalid/mcp";
+                    env.BAD = 1;
+                  };
+                }).outPath
+              ).success;
+            assert
+              !(builtins.tryEval
+                (wrapper.config.wrap {
+                  inherit pkgs;
+                  mcpServers = {
+                    bad = {
+                      url = "https://example.invalid/mcp";
+                      timeout = 0;
+                    };
+                    good.url = "https://example.invalid/other";
+                  };
+                }).outPath
+              ).success;
             pkgs.runCommand "pi-wrapper-mcp-validation-test" { } "touch $out";
 
           version = pkgs.runCommand "pi-wrapper-version-test" { } ''
