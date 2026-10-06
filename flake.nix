@@ -328,6 +328,15 @@
             configDir = "$HOME/default config";
             sessionDir = "$HOME/default sessions";
           };
+          onlineDispatchWrapper = wrapper.config.wrap {
+            inherit pkgs;
+            package = fakePi;
+            binName = "pi-dispatch-online";
+            extensions = [ extensionOne ];
+            configDir = "$HOME/default config";
+            sessionDir = "$HOME/default sessions";
+            offline = false;
+          };
           example = self.packages.${system}.example;
         in
         {
@@ -445,18 +454,33 @@
 
           dispatch = pkgs.runCommand "pi-wrapper-dispatch-smoke-test" { } ''
             script=${dispatchWrapper}/bin/pi-dispatch
+            online_script=${onlineDispatchWrapper}/bin/pi-dispatch-online
             test -x "$script"
+            test -x "$online_script"
 
             export PI_CODING_AGENT_DIR="$TMPDIR/caller config"
             export PI_CODING_AGENT_SESSION_DIR="$TMPDIR/caller sessions"
-            for command in auth config install list mcp remove uninstall update; do
+            for command in auth config install list mcp remove uninstall; do
               test "$("$script" "$command" marker)" = "$PI_CODING_AGENT_DIR|$PI_CODING_AGENT_SESSION_DIR|$command marker"
             done
             test "$("$script" marker)" = "$PI_CODING_AGENT_DIR|$PI_CODING_AGENT_SESSION_DIR|--extension ${extensionOne} marker"
 
-            # Package and model-catalog updates pass through unchanged.
-            for args in "--extensions" "--models" "--extension npm:pkg" "npm:pkg --force" "--help" "--all --help"; do
+            # Help still passes through while offline.
+            for args in "--help" "--all --help"; do
               test "$("$script" update $args)" = "$PI_CODING_AGENT_DIR|$PI_CODING_AGENT_SESSION_DIR|update $args"
+            done
+            # Explicit package and model-catalog updates are refused while offline.
+            for args in "--extensions" "--models" "--extension npm:pkg" "npm:pkg --force"; do
+              if "$script" update $args > "$TMPDIR/stdout" 2> "$TMPDIR/stderr"; then
+                echo "offline update $args was not refused" >&2
+                exit 1
+              fi
+              test ! -s "$TMPDIR/stdout"
+              grep -F 'pi-dispatch: package and model-catalog updates are disabled while PI_OFFLINE is set.' "$TMPDIR/stderr"
+            done
+            # An online wrapper still passes explicit updates through unchanged.
+            for args in "--extensions" "--models" "--extension npm:pkg" "npm:pkg --force"; do
+              test "$("$online_script" update $args)" = "$PI_CODING_AGENT_DIR|$PI_CODING_AGENT_SESSION_DIR|update $args"
             done
             # Updates that would replace the Nix-managed Pi are refused.
             for args in "" "--self" "self" "pi" "--all" "--force" "--extensions --self"; do
@@ -491,6 +515,22 @@
             test "$(PI_CODING_AGENT_DIR=/caller ${renamedWrapper}/bin/pi-work marker)" = "/caller||marker"
             # Subcommands use the wrapper's own agent directory too.
             test "$(${renamedWrapper}/bin/pi-work list)" = "$HOME/.local/state/pi/pi-work||list"
+
+            touch "$out"
+          '';
+
+          offline-update = pkgs.runCommand "pi-wrapper-offline-update-refusal-test" { } ''
+            export HOME="$TMPDIR"
+            export PI_CODING_AGENT_DIR="$TMPDIR/agent"
+            export PI_CODING_AGENT_SESSION_DIR="$TMPDIR/sessions"
+            mkdir -p "$PI_CODING_AGENT_DIR" "$PI_CODING_AGENT_SESSION_DIR"
+
+            if ${self.packages.${system}.pi}/bin/pi update --extensions > "$TMPDIR/stdout" 2> "$TMPDIR/stderr"; then
+              echo 'offline update --extensions was not refused' >&2
+              exit 1
+            fi
+            test ! -s "$TMPDIR/stdout"
+            grep -F 'pi: package and model-catalog updates are disabled while PI_OFFLINE is set.' "$TMPDIR/stderr"
 
             touch "$out"
           '';

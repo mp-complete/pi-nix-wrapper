@@ -111,9 +111,12 @@ for the `bash` tool, `!` commands, extensions, and stdio MCP servers.
 Pi is versioned by Nix, so the wrapper sets `PI_SKIP_VERSION_CHECK=1` and, by
 default, `PI_OFFLINE=1` when the caller has not set them. Offline mode also
 skips model-catalog refreshes, package update checks, automatic installation
-of missing configured packages, and bug-report uploads; set `offline = false`
-to restore them. Pi treats any non-empty `PI_OFFLINE` as offline in some code
-paths, so exporting `PI_OFFLINE=0` is not a reliable override.
+of missing configured packages, and bug-report uploads. To avoid silent no-op
+`pi update --extensions`, `pi update <source>`, and `pi update --models`
+commands, the wrapper refuses those explicit updates while `PI_OFFLINE` is
+set; use `offline = false` to restore them. Pi treats any non-empty
+`PI_OFFLINE` as offline in some code paths, so exporting `PI_OFFLINE=0` is
+not a reliable override.
 
 Each wrapper owns its own agent directory, so wrappers never share settings,
 credentials, trust decisions, MCP configuration, installed packages, or
@@ -137,7 +140,8 @@ resource flags, while retaining configured environment variables.
 The wrapper refuses `update` invocations that would self-update Pi: no target,
 `self`, `pi`, `--self`, or `--all`. Update the Nix input that provides Pi
 instead. Package and model-catalog updates (`update --extensions`,
-`update <source>`, `update --models`) and `--help` pass through.
+`update <source>`, `update --models`) pass through only when `PI_OFFLINE` is
+unset; `--help` always passes through.
 
 ## MCP servers
 

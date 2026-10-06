@@ -347,8 +347,11 @@ in
         Set {env}`PI_OFFLINE` unless the caller already set it. Pi then skips
         automatic network activity: model-catalog refreshes, package update
         checks, automatic installation of missing configured packages, and
-        bug-report uploads. Pi and its bundled model catalog are updated
-        through Nix instead.
+        bug-report uploads. To avoid silent no-op package or model-catalog
+        updates, the wrapper also refuses explicit `pi update --extensions`,
+        `pi update <source>`, and `pi update --models` requests while
+        {env}`PI_OFFLINE` is set. Pi and its bundled model catalog are
+        updated through Nix instead.
 
         Pi treats any non-empty {env}`PI_OFFLINE` as offline in some code
         paths, so set this option to `false` rather than exporting
@@ -446,8 +449,9 @@ in
     # those commands while retaining the environment setup emitted above.
     #
     # Pi itself is versioned by Nix, so `pi update` targets that would
-    # self-update Pi (no target, self, pi, --self, --all) are refused. Package
-    # and model-catalog updates remain available.
+    # self-update Pi (no target, self, pi, --self, --all) are refused.
+    # Package and model-catalog updates are also refused while PI_OFFLINE is
+    # set so the wrapper cannot report a silent no-op update as success.
     runShell = [
       ''
         case "''${1-}" in
@@ -475,7 +479,13 @@ in
               printf '%s\n' \
                 "''${0##*/}: Pi is managed by Nix; self-update is disabled." \
                 "Update the Nix input that provides Pi instead." \
-                "To update Pi packages, run: ''${0##*/} update --extensions" >&2
+                "To update Pi packages or model catalogs, use a wrapper configured with offline = false." >&2
+              exit 1
+            fi
+            if [ -z "$pi_wrapper_help" ] && [ -n "''${PI_OFFLINE-}" ]; then
+              printf '%s\n' \
+                "''${0##*/}: package and model-catalog updates are disabled while PI_OFFLINE is set." \
+                "Use a wrapper configured with offline = false, or unset PI_OFFLINE and retry." >&2
               exit 1
             fi
             exec ${lib.escapeShellArg config.wrapperPaths.input} "$@"
