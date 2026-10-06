@@ -247,7 +247,8 @@ in
             description = ''
               Whether Pi's default built-in tools start enabled. `false`
               passes {option}`--no-builtin-tools` while retaining extension
-              and custom tools.
+              and custom tools. An explicit {option}`tools.allow` entry may
+              still name a built-in tool to enable it.
             '';
           };
           allow = lib.mkOption {
@@ -402,7 +403,10 @@ in
   config = {
     package = lib.mkDefault pkgs.pi-coding-agent;
 
-    flags = {
+    flags = lib.throwIf (!config.tools.enable && config.tools.allow != null && config.tools.allow != [ ]) ''
+      pi wrapper: tools.enable = false conflicts with a non-empty tools.allow.
+      Remove the allowlist or set tools.enable = true.
+    '' {
       "--extension" = repeatFlag (
         config.piPackages ++ config.extensions ++ mcpServerExtensionPaths ++ builtinExtensionFlags
       );
@@ -418,7 +422,7 @@ in
       "--no-context-files" = !config.resourceDiscovery.contextFiles;
       "--no-tools" = !config.tools.enable || config.tools.allow == [ ];
       "--no-builtin-tools" = !config.tools.builtin;
-      "--tools" = lib.mkIf (config.tools.allow != null && config.tools.allow != [ ]) (
+      "--tools" = lib.mkIf (config.tools.enable && config.tools.allow != null && config.tools.allow != [ ]) (
         lib.concatStringsSep "," (lib.unique config.tools.allow)
       );
       "--exclude-tools" = commaFlag config.tools.exclude;
