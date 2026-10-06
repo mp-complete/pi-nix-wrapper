@@ -41,6 +41,10 @@ let
 
   jsonFormat = pkgs.formats.json { };
 
+  isStringAttrs = value: builtins.isAttrs value && lib.all builtins.isString (lib.attrValues value);
+  isStringList = value: builtins.isList value && lib.all builtins.isString value;
+  isPositiveNumber = value: (builtins.isInt value || builtins.isFloat value) && value > 0;
+
   mcpServerNames = lib.attrNames config.mcpServers;
   invalidMcpServerNames = lib.filter (
     name: builtins.match "[A-Za-z0-9_-]+" name == null
@@ -49,6 +53,54 @@ let
   clashingMcpServerNames = lib.filter (
     name: lib.length (lib.filter (other: mcpNamespace other == mcpNamespace name) mcpServerNames) > 1
   ) mcpServerNames;
+  mcpServerProblems =
+    server:
+    if !builtins.isAttrs server then
+      [ "must be an attribute set" ]
+    else
+      let
+        hasCommand = builtins.hasAttr "command" server;
+        hasUrl = builtins.hasAttr "url" server;
+      in
+      lib.concatLists [
+        (lib.optional (!hasCommand && !hasUrl) "must set exactly one of `command` or `url`")
+        (lib.optional (hasCommand && hasUrl) "must not set both `command` and `url`")
+        (lib.optional (hasCommand && !builtins.isString server.command) "`command` must be a string")
+        (lib.optional (hasUrl && !builtins.isString server.url) "`url` must be a string")
+        (lib.optional (builtins.hasAttr "args" server && !isStringList server.args) "`args` must be a list of strings")
+        (lib.optional (builtins.hasAttr "env" server && !isStringAttrs server.env) "`env` must be an attribute set of strings")
+        (lib.optional (builtins.hasAttr "headers" server && !isStringAttrs server.headers) "`headers` must be an attribute set of strings")
+        (lib.optional (builtins.hasAttr "cwd" server && !builtins.isString server.cwd) "`cwd` must be a string")
+        (lib.optional (builtins.hasAttr "description" server && !builtins.isString server.description) "`description` must be a string")
+        (lib.optional (builtins.hasAttr "exposure" server && !builtins.isString server.exposure) "`exposure` must be a string")
+        (lib.optional (builtins.hasAttr "toolExposure" server && !builtins.isString server.toolExposure) "`toolExposure` must be a string")
+        (lib.optional (builtins.hasAttr "enabled" server && !builtins.isBool server.enabled) "`enabled` must be a boolean")
+        (lib.optional (builtins.hasAttr "timeout" server && !isPositiveNumber server.timeout) "`timeout` must be a positive number")
+        (lib.optional (builtins.hasAttr "oauth" server && !builtins.isAttrs server.oauth) "`oauth` must be an attribute set")
+        (lib.optional (builtins.hasAttr "auth" server && !builtins.isAttrs server.auth) "`auth` must be an attribute set")
+        (lib.optional (builtins.hasAttr "oauth" server && builtins.isAttrs server.oauth && builtins.hasAttr "clientSecret" server.oauth && !builtins.isString server.oauth.clientSecret) "`oauth.clientSecret` must be a string")
+        (lib.optional (builtins.hasAttr "auth" server && builtins.isAttrs server.auth && builtins.hasAttr "provider" server.auth && !builtins.isString server.auth.provider) "`auth.provider` must be a string")
+        (lib.concatMap (
+          field:
+          lib.optional (hasUrl && builtins.hasAttr field server) "`${field}` is only valid with `command` transports"
+        ) [ "args" "env" "cwd" ])
+        (lib.concatMap (
+          field:
+          lib.optional (hasCommand && builtins.hasAttr field server) "`${field}` is only valid with `url` transports"
+        ) [ "headers" "oauth" "auth" ])
+      ];
+  invalidMcpServers = lib.filter (entry: entry != null) (
+    lib.mapAttrsToList (
+      name: server:
+      let
+        problems = mcpServerProblems server;
+      in
+      if problems == [ ] then
+        null
+      else
+        "${name}: ${lib.concatStringsSep "; " problems}"
+    ) config.mcpServers
+  );
 
   # Nix-declared MCP servers are registered by a generated extension rather
   # than written to mcp.json, so the wrapper never writes Pi's state at launch
@@ -59,8 +111,16 @@ let
     const servers = ${builtins.toJSON config.mcpServers};
 
     export default function (pi) {
+      const failures = [];
       for (const [name, server] of Object.entries(servers)) {
-        pi.registerMcpServer(name, server);
+        try {
+          pi.registerMcpServer(name, server);
+        } catch (error) {
+          failures.push(`''${name}: ''${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      if (failures.length > 0) {
+        throw new Error(`pi wrapper: failed to register mcpServers:\n''${failures.join("\n")}`);
       }
     }
   '';
@@ -84,6 +144,12 @@ let
         ''
           pi wrapper: mcpServers requires builtinExtensions.mcp = true. Pi's built-in
           MCP extension connects servers registered by other extensions.
+        ''
+        lib.throwIf
+        (invalidMcpServers != [ ])
+        ''
+          pi wrapper: invalid mcpServers entries:
+          ${lib.concatMapStringsSep "\n" (entry: "  - ${entry}") invalidMcpServers}
         ''
         [ "${mcpServersExtension}/pi-wrapper-mcp-servers" ];
 in
@@ -309,11 +375,12 @@ in
       '';
       description = ''
         MCP servers registered for every session through a generated extension
-        that calls `pi.registerMcpServer()`. Each value has the shape of an
-        `mcpServers` entry in Pi's `mcp.json`: `command`, `args`, `env`, and
-        `cwd` for stdio servers; `url`, `headers`, `oauth`, and `auth` for HTTP
-        servers; plus `exposure`, `toolExposure`, `description`, `enabled`,
-        and `timeout`.
+        that calls `pi.registerMcpServer()`. Values are validated during Nix
+        evaluation for the transport shape and common field types. Each value
+        has the shape of an `mcpServers` entry in Pi's `mcp.json`: `command`,
+        `args`, `env`, and `cwd` for stdio servers; `url`, `headers`, `oauth`,
+        and `auth` for HTTP servers; plus `exposure`, `toolExposure`,
+        `description`, `enabled`, and `timeout`.
 
         The wrapper never writes `mcp.json`, so servers added with
         `pi mcp add` remain the user's. A server of the same name in `mcp.json`

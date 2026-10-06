@@ -158,11 +158,12 @@ mcpServers = {
 ```
 
 The wrapper loads a generated extension that registers these servers with
-`pi.registerMcpServer()` on every load. It never writes `mcp.json`, so
-servers added ad hoc with `pi mcp add` stay in the user's writable file and
-connect next to the declared ones. A server of the same name in `mcp.json`
-takes precedence, which also allows a per-machine override such as
-`"enabled": false`.
+`pi.registerMcpServer()` on every load. Values are validated during Nix
+evaluation for the selected transport and common field types before the
+wrapper is generated. It never writes `mcp.json`, so servers added ad hoc
+with `pi mcp add` stay in the user's writable file and connect next to the
+declared ones. A server of the same name in `mcp.json` takes precedence,
+which also allows a per-machine override such as `"enabled": false`.
 
 - Secrets: values are stored in the Nix store. Use Pi's runtime interpolation
   (`${NAME}` or a leading `!command`) in `env`, `headers`, and
@@ -215,7 +216,7 @@ option when wrapping.
 | `tools.exclude` | list of strings | Set `--exclude-tools` |
 | `tools.packages` | list of packages | Append executables to `PATH` |
 | `offline` | boolean (default `true`) | Set `PI_OFFLINE=1` if unset |
-| `mcpServers` | attribute set of JSON values | Register MCP servers through a generated extension |
+| `mcpServers` | attribute set of JSON values | Register and validate MCP servers through a generated extension |
 | `configDir` | null or string | Set `PI_CODING_AGENT_DIR` if unset; defaults per wrapper name |
 | `sessionDir` | null or string | Set `PI_CODING_AGENT_SESSION_DIR` if unset |
 
