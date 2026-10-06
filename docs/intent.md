@@ -63,10 +63,11 @@ It also accepts one replacement system prompt via `--system-prompt`. These
 options are a good fit for Nix because store paths are immutable and list-valued
 module options compose naturally.
 
-Package-management commands must remain the first argument. The generated
-wrapper therefore needs to bypass injected resource flags for commands such as
-`install`, `remove`, `uninstall`, `update`, `list`, `config`, and `auth`, while
-retaining applicable environment setup.
+Pi's subcommands must remain the first argument and reject injected session
+flags. The generated wrapper therefore bypasses injected resource flags for
+`install`, `remove`, `uninstall`, `update`, `list`, `config`, `auth`, and `mcp`,
+while retaining applicable environment setup. Pi itself is versioned by Nix,
+so `update` invocations that would self-update Pi are refused.
 
 ### Writable agent-directory state
 
@@ -233,6 +234,26 @@ claimed after dependency closure and runtime loading are validated.
 - preserve mutable auth, sessions, and user package state;
 - add atomicity, concurrency, malformed-file, and permission tests.
 
+Decided: each wrapper owns its own agent directory. Wrappers never share
+`settings.json`, `auth.json`, `trust.json`, or MCP credentials; logging in once
+per wrapper is accepted as the cost of having one writer domain per directory.
+Implemented as the `configDir` default: a wrapper named `pi` keeps Pi's
+`~/.pi/agent`, and a renamed wrapper uses
+`${XDG_STATE_HOME:-$HOME/.local/state}/pi/<binName>`.
+
+Findings from Pi 1.0.0 that constrain the remaining decisions:
+
+- The agent directory must be writable. A plain startup writes `auth.json`,
+  `models-store.json`, and `sessions/`; Pi also writes `trust.json`,
+  `mcp.json`, `mcp-auth.json`, logs, and installed packages there.
+- A read-only `settings.json` is unsafe: `pi install` reported success and
+  exited 0 while the write was silently dropped.
+- Pi writes `settings.json` under a `proper-lockfile` lock
+  (`settings.json.lock` directory) and re-reads the file, patching only the
+  fields changed in that session. A launch-time reconciler that takes the same
+  lock and patches only Nix-owned keys can therefore coexist with Pi's own
+  writes.
+
 The recommended boundary is to complete Milestone 1 before adding a runtime
 state reconciler. This remains a product decision until explicitly approved.
 
@@ -266,12 +287,53 @@ The repository already contains a provisional wrapper module and smoke checks.
 They currently pass `nix flake check -L` on `x86_64-linux`. This is a starting
 point, not a commitment to the final API.
 
-The current `pi.nix` input builds Pi 0.84.4, while the ambient Pi documentation
-used during initial research was from 0.87.1. New behavior must be checked
-against the pinned executable. The pinned `pi.nix` project is also useful prior
-art: it merges declarative settings into a writable `settings.json` on launch
-but only seeds `models.json` when absent, demonstrating why per-file policy must
-be explicit.
+The flake pins Pi 1.0.0 through `pi.nix`, and a check asserts that version.
+New behavior must be checked against the pinned executable. The pinned `pi.nix`
+project is also useful prior art: it merges declarative settings into a
+writable `settings.json` on launch but only seeds `models.json` when absent,
+demonstrating why per-file policy must be explicit.
+
+### Pi 1.0.0 decisions
+
+- `mcp` joins the subcommand bypass.
+- `--no-extensions` now disables Pi's built-in extensions too. The wrapper
+  restores enabled `builtinExtensions` with `--extension builtin:<name>` when
+  extension discovery is off.
+- Pi self-update is refused by the wrapper; Pi updates come through Nix.
+- `PI_SKIP_VERSION_CHECK=1` is always defaulted and `PI_OFFLINE=1` is
+  defaulted through the `offline` option. Offline also stops model-catalog
+  refreshes and automatic installation of missing configured packages.
+- `tools.*` models tool selection and Nix-provided executables on `PATH`.
+- `useTheme` maps to `--use-theme`.
+- `mcpServers` registers Nix-declared MCP servers through a generated extension
+  (`pi.registerMcpServer()`), with no launch-time writes. `<agent-dir>/mcp.json`
+  stays user-owned for ad-hoc `pi mcp add` servers, and a same-name entry there
+  overrides a declared server. The accepted costs are that shell `pi mcp list`
+  and `pi mcp login` do not show declared servers (sign in through `/mcp`), and
+  that `/mcp` toggles on declared servers last for one session. OAuth for
+  registered servers was confirmed by reading Pi's MCP code (same connection,
+  credential store, and `/mcp login` path as `mcp.json` servers); it is not yet
+  exercised by a check. Secret interpolation (`${NAME}`, `!command`) is.
+- `--tui-mode` is deliberately not modelled: it is a user preference, settable
+  through the `tuiMode` setting or a consumer's `flags`.
+
+### Deferred and open items
+
+- **Model selection.** `--model`, `--thinking`, and `--models` could become
+  options, but are deferred. Before adding them, verify how Pi resolves a
+  repeated flag supplied by the caller, so wrapper values remain defaults.
+- **Extension installation.** Needs a closer look: how `pi install` and the
+  `packages` setting interact with Nix-provided packages, offline mode (which
+  skips installing missing configured packages), `npmCommand`, and the
+  `NPM_CONFIG_PREFIX` set by `pi.nix`; and how a future `buildNpmPiPackage`
+  keeps Pi's host-provided packages (`@earendil-works/pi-ai`,
+  `pi-agent-core`, `pi-coding-agent`, `pi-tui`, `typebox`) as peers rather
+  than bundled copies.
+- **Custom tools backed by Nix executables.** A generated extension could
+  register model-callable tools that execute a Nix-provided binary, beyond
+  putting executables on `PATH`.
+- **Agent directory.** A static or managed agent directory could replace many
+  injected flags; see Milestone 2.
 
 Primary references:
 
