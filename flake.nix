@@ -243,6 +243,28 @@
             inherit pkgs;
             package = fakePi;
           };
+          emptyToolsWrapper = wrapper.config.wrap {
+            inherit pkgs;
+            package = fakePi;
+            binName = "pi-no-tools";
+            tools.allow = [ ];
+          };
+          builtinToolOverrideWrapper = wrapper.config.wrap {
+            inherit pkgs;
+            binName = "pi-builtins";
+            piPackages = [ piPackage ];
+            resourceDiscovery = {
+              extensions = false;
+              skills = false;
+              promptTemplates = false;
+              themes = false;
+              contextFiles = false;
+            };
+            tools = {
+              builtin = false;
+              allow = [ "codemode" ];
+            };
+          };
           renamedWrapper = wrapper.config.wrap {
             inherit pkgs;
             package = fakePi;
@@ -494,6 +516,39 @@
 
             touch "$out"
           '';
+
+          tools =
+            assert
+              !(builtins.tryEval
+                (wrapper.config.wrap {
+                  inherit pkgs;
+                  tools = {
+                    enable = false;
+                    allow = [ "read" ];
+                  };
+                }).outPath
+              ).success;
+            pkgs.runCommand "pi-wrapper-tools-validation-test" { } ''
+              empty_script=${emptyToolsWrapper}/bin/pi-no-tools
+              grep -F -- '--no-tools' "$empty_script"
+              ! grep -F -- '--tools ' "$empty_script"
+
+              builtins_script=${builtinToolOverrideWrapper}/bin/pi-builtins
+              grep -F -- '--no-builtin-tools' "$builtins_script"
+              grep -F -- '--tools codemode' "$builtins_script"
+
+              export PI_CODING_AGENT_DIR="$TMPDIR/agent"
+              export PI_CODING_AGENT_SESSION_DIR="$TMPDIR/sessions"
+              mkdir -p "$PI_CODING_AGENT_DIR" "$PI_CODING_AGENT_SESSION_DIR"
+              "$builtins_script" --help > "$TMPDIR/help" 2>&1
+              grep -F -- '--wrapper-smoke-package-loaded' "$TMPDIR/help"
+              resources="$($builtins_script --print /wrapper-smoke-resources 2>&1)"
+              printf '%s\n' "$resources" > "$TMPDIR/resources"
+              grep -Fx -- 'builtin-codemode-loaded=true' "$TMPDIR/resources"
+              grep -Fx -- 'active-tools=codemode' "$TMPDIR/resources"
+
+              touch "$out"
+            '';
 
           mcp = pkgs.runCommand "pi-wrapper-mcp-smoke-test" { } ''
             script=${mcpWrapper}/bin/pi-mcp

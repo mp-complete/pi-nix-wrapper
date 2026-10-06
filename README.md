@@ -105,7 +105,10 @@ is enabled, so that combination is an evaluation error.
 `tools.allow`, `tools.exclude`, `tools.builtin`, and `tools.enable` map to
 `--tools`, `--exclude-tools`, `--no-builtin-tools`, and `--no-tools`.
 `tools.allow` replaces Pi's selection, so name every tool to enable; an empty
-list disables all tools. `tools.packages` appends Nix packages to Pi's `PATH`
+list disables all tools. `tools.enable = false` rejects a non-empty allowlist
+at evaluation time. `tools.builtin = false` only disables Pi's default
+built-in selection; an explicit `tools.allow` entry may still name a built-in
+tool to enable it. `tools.packages` appends Nix packages to Pi's `PATH`
 for the `bash` tool, `!` commands, extensions, and stdio MCP servers.
 
 Pi is versioned by Nix, so the wrapper sets `PI_SKIP_VERSION_CHECK=1` and, by
@@ -210,8 +213,8 @@ option when wrapping.
 | `resourceDiscovery.themes` | boolean | Toggle ambient theme discovery |
 | `resourceDiscovery.contextFiles` | boolean | Toggle `AGENTS.md` and `CLAUDE.md` discovery |
 | `builtinExtensions.{mcp,codemode,toolSearch,llamaCpp}` | boolean | Keep built-ins when extension discovery is disabled |
-| `tools.enable` | boolean | `false` emits `--no-tools` |
-| `tools.builtin` | boolean | `false` emits `--no-builtin-tools` |
+| `tools.enable` | boolean | `false` emits `--no-tools`; cannot be combined with a non-empty `tools.allow` |
+| `tools.builtin` | boolean | `false` emits `--no-builtin-tools`, but `tools.allow` may still explicitly name a built-in tool |
 | `tools.allow` | null or list of strings | Set the `--tools` allowlist |
 | `tools.exclude` | list of strings | Set `--exclude-tools` |
 | `tools.packages` | list of packages | Append executables to `PATH` |
