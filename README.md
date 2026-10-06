@@ -12,6 +12,7 @@ module for [Pi](https://pi.dev), a terminal coding agent.
 The flake currently exports:
 
 - `lib.mkPiPackage`: a local-resource Pi package assembler;
+- `lib.mkPiExtension`: a hash-pinned npm extension source helper;
 - `wrapperModules.pi`: the unevaluated, reusable wrapper module;
 - `wrappers.pi`: the partially evaluated wrapper with `.wrap`, `.apply`, and
   `.eval`;
@@ -42,6 +43,34 @@ public wrapper and `mkPiPackage` APIs. It includes an extension, skill, prompt
 template, theme, and appended wrapper instructions. Run `/demo` inside Pi to
 verify the extension and skill, or `/demo-review` to expand the bundled prompt.
 See [`examples/pi-demo`](examples/pi-demo/) for the resources and details.
+
+## Load a pinned npm extension
+
+`lib.mkPiExtension` fetches a versioned npm package tarball with a required
+integrity hash, then exposes its selected entry point as a Nix-store file. The
+result can be passed directly to the existing `extensions` option:
+
+```nix
+ponytail = pi-wrapper-modules.lib.mkPiExtension {
+  inherit pkgs;
+  npmPackage = "@example/ponytail";
+  version = "1.0.0";
+  hash = "sha256-...";
+  entrypoint = "dist/index.js";
+};
+
+extensions = [ ponytail ];
+```
+
+Alternatively, pass `src = ./extension-package` for a local source directory
+containing the entry point. A plain local `.js` or `.ts` file can still be used
+directly in `extensions`.
+
+This helper fetches only the npm package tarball; it does not install the
+package's npm dependencies. It works for extensions that bundle their runtime
+dependencies or only use Pi's provided APIs. Extensions requiring external npm
+dependencies need those dependencies bundled with the extension; a dependency-
+aware npm builder remains future work.
 
 ## Configure the wrapper
 
