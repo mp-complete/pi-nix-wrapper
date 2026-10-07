@@ -88,7 +88,10 @@ let
         [ "${mcpServersExtension}/pi-wrapper-mcp-servers" ];
 in
 {
-  imports = [ wlib.modules.default ];
+  imports = [
+    wlib.modules.default
+    ./extra-config-files.nix
+  ];
 
   options = {
     piPackages = lib.mkOption {
@@ -497,8 +500,8 @@ in
 
     meta.description = ''
       Wrap Pi with declarative package, extension, skill, prompt-template,
-      theme, tool, system-prompt, resource-discovery, and state-directory
-      configuration.
+      theme, tool, system-prompt, resource-discovery, extra-config-file, and
+      state-directory configuration.
     '';
   };
 }

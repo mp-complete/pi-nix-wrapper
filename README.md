@@ -179,6 +179,89 @@ The wrapper refuses `update` invocations that would self-update Pi: no target,
 instead. Package and model-catalog updates (`update --extensions`,
 `update <source>`, `update --models`) and `--help` pass through.
 
+## Additional config files
+
+`extraConfigFiles` installs writable files into the effective `configDir` before
+Pi starts, including for subcommands. Supply exactly one non-null `json`, `text`,
+or `source` per file:
+
+```nix
+extraConfigFiles = {
+  "my-extension.json" = {
+    json = {
+      enabled = true;
+      timeout = 30;
+      exclude = [ "node_modules" "dist" ];
+      nested.option = "value";
+    };
+    mode = "enforce";
+  };
+
+  "AGENTS.md" = {
+    text = ''
+      Prefer small, focused changes.
+    '';
+    mode = "enforce";
+  };
+
+  "keybindings.json" = {
+    source = ./keybindings.json;
+    # mode = "seed"; # The default.
+  };
+};
+```
+
+- **`seed`** creates a file only when its destination has no existing directory
+  entry. Later edits are preserved, including malformed JSON. Existing symlinks
+  (even dangling ones) and directories are left alone.
+- **`enforce`** replaces the entire file on every launch. It deliberately discards
+  local edits, including malformed JSON. Use it only when Nix owns all contents;
+  prefer `seed` for mutable Pi settings and extension configuration.
+- **`json`** uses `pkgs.formats.json`: nested attribute sets and lists compose
+  across Nix modules, with conflicting scalar values requiring an explicit
+  override. `null` means this input is unset; nulls *inside* JSON are supported.
+- **`text`** uses `lib.types.lines`: multiple modules' contributions concatenate.
+  Use `lib.mkBefore` / `lib.mkAfter` for ordering, or `lib.mkForce` to replace them.
+- **`source`** selects one source file copied verbatim. Its contents are not merged
+  or validated as JSON, regardless of its filename.
+
+For example, a downstream module can extend the declared instructions:
+
+```nix
+extraConfigFiles."AGENTS.md".text = lib.mkAfter ''
+  Run the repository's checks before finishing.
+'';
+```
+
+This composes the Nix declarations, **not** any existing `AGENTS.md` on disk.
+Pi retains its normal context-file discovery and precedence, subject to
+`resourceDiscovery.contextFiles`. Instructions from other wrappers or projects
+are not copied in, and `appendSystemPrompts` remains a separate mechanism.
+
+### Ownership and safety
+
+- An exported `PI_CODING_AGENT_DIR` takes precedence over `configDir`, just as it
+  does for Pi. Installation follows that effective directory.
+- Keys are relative paths; nested paths and spaces are supported. Absolute paths,
+  empty / `.` / `..` components, and file/parent path collisions are rejected.
+- Files are regular writable copies, not Nix-store symlinks. New/replaced files
+  have permissions `0600`; newly created directories request `0700`. Seeded
+  existing entries retain their permissions. All declared contents enter the
+  Nix store: **never include literal credentials or secrets**.
+- Publication is atomic per file. Concurrent seeds cannot overwrite an existing
+  entry; concurrent enforcements use last-replacement-wins semantics. There is
+  **no locking against Pi or extension writers**, and no runtime JSON merge.
+- Symlinked parent directories inside the agent directory are refused. Enforce
+  also refuses symlink or non-regular-file destinations. The explicitly selected
+  agent-directory root may itself be a symlink. The directory must be trusted,
+  user-owned state; this is not a sandbox against concurrent directory changes.
+- Errors stop Pi from starting. Installation is not a multi-file transaction:
+  earlier files may already have been installed when a later one fails. Ordinary
+  failures clean up staging files; forcible termination can leave a private
+  `.pi-extra-config-*` staging directory.
+- Removing a declaration does not delete its installed file. With the default
+  empty `extraConfigFiles`, there is no installer or startup filesystem activity.
+
 ## MCP servers
 
 `mcpServers` declares MCP servers for every session. Each value has the shape
@@ -256,6 +339,7 @@ option when wrapping.
 | `tools.packages` | list of packages | Append executables to `PATH` |
 | `offline` | boolean (default `true`) | Set `PI_OFFLINE=1` if unset |
 | `mcpServers` | attribute set of JSON values | Register MCP servers through a generated extension |
+| `extraConfigFiles` | attribute set of file declarations | Install writable `text`, `json`, or `source` files with `seed` / `enforce` ownership |
 | `configDir` | null or string | Set `PI_CODING_AGENT_DIR` if unset; defaults per wrapper name |
 | `sessionDir` | null or string | Set `PI_CODING_AGENT_SESSION_DIR` if unset |
 
