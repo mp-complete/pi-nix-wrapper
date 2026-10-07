@@ -46,31 +46,33 @@ See [`examples/pi-demo`](examples/pi-demo/) for the resources and details.
 
 ## Load a pinned npm extension
 
-`lib.mkPiExtension` fetches a versioned npm package tarball with a required
-integrity hash, then exposes its selected entry point as a Nix-store file. The
-result can be passed directly to the existing `extensions` option:
+`lib.mkPiExtension` fetches a versioned npm package tarball with its npm
+`dist.integrity` SRI hash, then exposes its selected entry point as a Nix-store
+file. The result can be passed directly to the existing `extensions` option:
 
 ```nix
-ponytail = pi-wrapper-modules.lib.mkPiExtension {
+piBtw = pi-wrapper-modules.lib.mkPiExtension {
   inherit pkgs;
-  npmPackage = "@example/ponytail";
-  version = "1.0.0";
-  hash = "sha256-...";
-  entrypoint = "dist/index.js";
+  npmPackage = "pi-btw";
+  version = "0.7.1";
+  hash = "sha512-XVHTwc6QNYHEXvdobqbUrlkvoEo/pq3pWgq4OPT/BMiyjZpjlhUW/aBO+NjFdyu1app9QL8kyGP+tsB18S1GqA==";
+  entrypoint = "extensions/btw.ts";
 };
 
-extensions = [ ponytail ];
+extensions = [ piBtw ];
 ```
 
 Alternatively, pass `src = ./extension-package` for a local source directory
 containing the entry point. A plain local `.js` or `.ts` file can still be used
 directly in `extensions`.
 
-This helper fetches only the npm package tarball; it does not install the
-package's npm dependencies. It works for extensions that bundle their runtime
-dependencies or only use Pi's provided APIs. Extensions requiring external npm
-dependencies need those dependencies bundled with the extension; a dependency-
-aware npm builder remains future work.
+The `pi-btw@0.7.1` check in `nix flake check` fetches the published npm tarball
+and loads its TypeScript extension, including its sibling source file, with the
+Pi version pinned by this flake. The package declares Pi's APIs as peer
+dependencies and has no runtime dependencies. The helper does not install npm
+dependencies; extensions that import packages beyond Pi's host APIs need those
+dependencies bundled with the extension. A dependency-aware npm builder remains
+future work.
 
 ## Configure the wrapper
 

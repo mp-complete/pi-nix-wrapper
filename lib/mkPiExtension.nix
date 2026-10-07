@@ -35,15 +35,28 @@ let
     entrypointParts != [ ]
     && lib.all (part: part != "" && part != "." && part != "..") entrypointParts;
 
-  source =
-    if src != null then
-      src
+  npmSource =
+    if npmPackage == null then
+      null
     else
-      pkgs.fetchzip {
-        url = "https://registry.npmjs.org/${npmPackage}/-/${baseNameOf npmPackage}-${version}.tgz";
-        inherit hash;
-        stripRoot = true;
-      };
+      let
+        tarball = pkgs.fetchurl {
+          url = "https://registry.npmjs.org/${npmPackage}/-/${baseNameOf npmPackage}-${version}.tgz";
+          inherit hash;
+        };
+      in
+      pkgs.runCommand "${lib.strings.sanitizeDerivationName npmPackage}-${version}-source"
+        {
+          nativeBuildInputs = [
+            pkgs.gnutar
+            pkgs.gzip
+          ];
+        }
+        ''
+          mkdir -p "$out"
+          tar -xzf ${tarball} --strip-components=1 -C "$out"
+        '';
+  source = if src != null then src else npmSource;
   outputName =
     if npmPackage != null then
       "${lib.strings.sanitizeDerivationName npmPackage}-${version}-extension.js"
