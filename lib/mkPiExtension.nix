@@ -59,9 +59,9 @@ let
   source = if src != null then src else npmSource;
   outputName =
     if npmPackage != null then
-      "${lib.strings.sanitizeDerivationName npmPackage}-${version}-extension.js"
+      "${lib.strings.sanitizeDerivationName npmPackage}-${version}-${baseNameOf entrypoint}"
     else
-      "${lib.strings.sanitizeDerivationName (baseNameOf (toString src))}-extension.js";
+      "${lib.strings.sanitizeDerivationName (baseNameOf (toString src))}-${baseNameOf entrypoint}";
 in
 assert lib.assertMsg sourceModesValid "mkPiExtension requires exactly one of `src` or `npmPackage`";
 assert lib.assertMsg validPackageName "mkPiExtension `npmPackage` must be a valid unscoped or scoped npm package name";
