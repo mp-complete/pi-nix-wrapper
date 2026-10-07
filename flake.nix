@@ -191,61 +191,6 @@
             inherit pkgs;
             src = piExtensionSource;
           };
-          npmPiExtensionTarball = pkgs.runCommand "pi-wrapper-smoke-npm-tarball" {
-            nativeBuildInputs = [
-              pkgs.gnutar
-              pkgs.gzip
-            ];
-          } ''
-            mkdir -p "$TMPDIR/package"
-            cp ${piExtensionSource}/index.js "$TMPDIR/package/index.js"
-            tar -czf "$out" -C "$TMPDIR" package
-          '';
-          npmFetchPkgs = pkgs // {
-            fetchurl =
-              {
-                url,
-                hash,
-                ...
-              }:
-              assert url == "https://registry.npmjs.org/@example/ponytail/-/ponytail-1.2.3.tgz";
-              assert hash == "sha256-test";
-              npmPiExtensionTarball;
-          };
-          npmPiExtension = projectLib.mkPiExtension {
-            pkgs = npmFetchPkgs;
-            npmPackage = "@example/ponytail";
-            version = "1.2.3";
-            hash = "sha256-test";
-          };
-          piBtwExtension = projectLib.mkPiExtension {
-            inherit pkgs;
-            npmPackage = "pi-btw";
-            version = "0.7.1";
-            hash = "sha512-XVHTwc6QNYHEXvdobqbUrlkvoEo/pq3pWgq4OPT/BMiyjZpjlhUW/aBO+NjFdyu1app9QL8kyGP+tsB18S1GqA==";
-            entrypoint = "extensions/btw.ts";
-          };
-          piBtwProbe = pkgs.writeText "pi-wrapper-real-extension-probe.js" ''
-            export default function (pi) {
-              const loaded = pi.getCommands().some((command) => command.name === "btw");
-              pi.registerCommand("real-extension-probe", {
-                description: "Reports whether the real npm extension loaded",
-                handler: async (_args, ctx) => {
-                  console.log(`pi-btw-extension-loaded=''${loaded}`);
-                  ctx.shutdown();
-                },
-              });
-            }
-          '';
-          piBtwWrapper = wrapper.config.wrap {
-            inherit pkgs;
-            binName = "pi-real-extension";
-            extensions = [
-              piBtwExtension
-              piBtwProbe
-            ];
-            resourceDiscovery.extensions = false;
-          };
           systemPrompt = pkgs.writeText "pi-wrapper-smoke-system-prompt" "Replacement prompt.";
           appendedPrompt = pkgs.writeText "pi-wrapper-smoke-appended-prompt" "Appended prompt.";
           skill = pkgs.writeText "pi-wrapper-smoke-skill.md" "# Smoke test skill";
@@ -432,25 +377,6 @@
             test -L ${piExtension}
             test "$(readlink ${piExtension})" = ${piExtensionSource}/index.js
             test -f ${piExtension}
-
-            test -L ${npmPiExtension}
-            test -f ${npmPiExtension}
-            grep -F "registerFlag" ${npmPiExtension}
-            touch "$out"
-          '';
-
-          pi-btw-extension = pkgs.runCommand "pi-wrapper-pi-btw-extension-test" { } ''
-            test -L ${piBtwExtension}
-            test -f ${piBtwExtension}
-
-            export HOME="$TMPDIR/home"
-            export PI_CODING_AGENT_DIR="$TMPDIR/agent"
-            mkdir -p "$HOME" "$PI_CODING_AGENT_DIR"
-            cd "$TMPDIR"
-
-            output="$(${piBtwWrapper}/bin/pi-real-extension --print /real-extension-probe 2>&1)"
-            printf '%s\n' "$output"
-            grep -Fx -- "pi-btw-extension-loaded=true" <<< "$output"
             touch "$out"
           '';
 

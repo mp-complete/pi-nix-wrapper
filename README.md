@@ -48,31 +48,29 @@ See [`examples/pi-demo`](examples/pi-demo/) for the resources and details.
 
 `lib.mkPiExtension` fetches a versioned npm package tarball with its npm
 `dist.integrity` SRI hash, then exposes its selected entry point as a Nix-store
-file. The result can be passed directly to the existing `extensions` option:
+file. Pass its result directly to the existing `extensions` option:
 
 ```nix
-piBtw = pi-wrapper-modules.lib.mkPiExtension {
+myExtension = pi-wrapper-modules.lib.mkPiExtension {
   inherit pkgs;
-  npmPackage = "pi-btw";
-  version = "0.7.1";
-  hash = "sha512-XVHTwc6QNYHEXvdobqbUrlkvoEo/pq3pWgq4OPT/BMiyjZpjlhUW/aBO+NjFdyu1app9QL8kyGP+tsB18S1GqA==";
-  entrypoint = "extensions/btw.ts";
+  npmPackage = "my-pi-extension";
+  version = "1.0.0";
+  hash = "sha512-...";
+  entrypoint = "dist/index.js";
 };
 
-extensions = [ piBtw ];
+extensions = [ myExtension ];
 ```
 
 Alternatively, pass `src = ./extension-package` for a local source directory
 containing the entry point. A plain local `.js` or `.ts` file can still be used
 directly in `extensions`.
 
-The `pi-btw@0.7.1` check in `nix flake check` fetches the published npm tarball
-and loads its TypeScript extension, including its sibling source file, with the
-Pi version pinned by this flake. The package declares Pi's APIs as peer
-dependencies and has no runtime dependencies. The helper does not install npm
-dependencies; extensions that import packages beyond Pi's host APIs need those
-dependencies bundled with the extension. A dependency-aware npm builder remains
-future work.
+See the standalone [`pi-btw` example](examples/pi-btw-extension/) for a real
+published extension fetched by hash and loaded by the pinned Pi package. The
+helper extracts only the npm package tarball; it does not install npm
+dependencies, so extensions that require external dependencies must bundle
+them.
 
 ## Configure the wrapper
 
