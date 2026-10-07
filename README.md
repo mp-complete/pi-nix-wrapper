@@ -72,6 +72,17 @@ helper extracts only the npm package tarball; it does not install npm
 dependencies, so extensions that require external dependencies must bundle
 them.
 
+This repository also ships a reusable [`mk-pi-extension` skill](skills/mk-pi-extension/)
+for downstream wrappers. Load it directly from the flake input when you want Pi
+to explain or scaffold `mkPiExtension` usage:
+
+```nix
+skills = [ "${pi-wrapper-modules}/skills/mk-pi-extension" ];
+```
+
+Use `skills = [ "${pi-wrapper-modules}/skills" ];` to make every bundled skill
+from this repository available.
+
 ## Configure the wrapper
 
 Apply the exported overlay to the package set passed to `.wrap`:
