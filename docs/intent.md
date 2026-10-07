@@ -185,9 +185,12 @@ myPiPackage = inputs.pi-nix-wrapper.lib.mkPiPackage {
 ```
 
 It should create a stable Pi package root, generate `package.json`, and link
-resources already available to Nix. A separate future `buildNpmPiPackage`
-interface can address npm sources and their dependency closures. Keeping these
-builders separate avoids overstating what a simple resource assembler can do.
+resources already available to Nix. `mkPiExtension` additionally supports a
+hash-pinned npm tarball and explicit entry point, but does not install that
+package's npm dependencies. A future dependency-aware npm package builder must
+address lockfiles, runtime dependency closures, and Pi-provided peer packages.
+Keeping these builders separate avoids overstating what a simple resource
+assembler can do.
 
 Pi identifies CLI-loaded packages partly through paths visible at runtime.
 Store-hashed derivation names can produce poor display names, so wrappers may
@@ -322,13 +325,13 @@ demonstrating why per-file policy must be explicit.
 - **Model selection.** `--model`, `--thinking`, and `--models` could become
   options, but are deferred. Before adding them, verify how Pi resolves a
   repeated flag supplied by the caller, so wrapper values remain defaults.
-- **Extension installation.** Needs a closer look: how `pi install` and the
-  `packages` setting interact with Nix-provided packages, offline mode (which
-  skips installing missing configured packages), `npmCommand`, and the
-  `NPM_CONFIG_PREFIX` set by `pi.nix`; and how a future `buildNpmPiPackage`
-  keeps Pi's host-provided packages (`@earendil-works/pi-ai`,
-  `pi-agent-core`, `pi-coding-agent`, `pi-tui`, `typebox`) as peers rather
-  than bundled copies.
+- **Dependency-aware npm extensions.** `mkPiExtension` fetches a pinned package
+  tarball without installing its dependencies. A fuller builder still needs a
+  clear lockfile strategy and must keep Pi's host-provided packages
+  (`@earendil-works/pi-ai`, `pi-agent-core`, `pi-coding-agent`, `pi-tui`,
+  `typebox`) as peers rather than bundled copies. Also investigate how
+  `pi install`, the `packages` setting, offline mode, `npmCommand`, and
+  `NPM_CONFIG_PREFIX` interact with Nix-provided packages.
 - **Custom tools backed by Nix executables.** A generated extension could
   register model-callable tools that execute a Nix-provided binary, beyond
   putting executables on `PATH`.

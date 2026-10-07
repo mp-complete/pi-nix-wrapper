@@ -175,6 +175,22 @@
           };
           extensionOne = pkgs.writeText "pi-wrapper-smoke-extension-one.js" "export default function () {}";
           extensionTwo = pkgs.writeText "pi-wrapper-smoke-extension-two.js" "export default function () {}";
+          piExtensionSource = pkgs.runCommand "pi-wrapper-smoke-nix-extension" { } ''
+            mkdir -p "$out"
+            cat > "$out/index.js" <<'EOF'
+            export default function (pi) {
+              pi.registerFlag("wrapper-smoke-nix-extension-loaded", {
+                description: "Proves the Nix extension helper loaded",
+                type: "boolean",
+                default: false,
+              });
+            }
+            EOF
+          '';
+          piExtension = projectLib.mkPiExtension {
+            inherit pkgs;
+            src = piExtensionSource;
+          };
           systemPrompt = pkgs.writeText "pi-wrapper-smoke-system-prompt" "Replacement prompt.";
           appendedPrompt = pkgs.writeText "pi-wrapper-smoke-appended-prompt" "Appended prompt.";
           skill = pkgs.writeText "pi-wrapper-smoke-skill.md" "# Smoke test skill";
@@ -196,7 +212,10 @@
           };
           configured = baseConfigured.wrap {
             binName = "pi-smoke";
-            extensions = [ extensionTwo ];
+            extensions = [
+              extensionTwo
+              piExtension
+            ];
             promptTemplates = [ template ];
             themes = [ theme ];
             systemPrompt = systemPrompt;
@@ -354,6 +373,13 @@
                 touch "$out"
               '';
 
+          pi-extension = pkgs.runCommand "pi-wrapper-extension-helper-test" { } ''
+            test -L ${piExtension}
+            test "$(readlink ${piExtension})" = ${piExtensionSource}/index.js
+            test -f ${piExtension}
+            touch "$out"
+          '';
+
           example = pkgs.runCommand "pi-wrapper-example-smoke-test" { } ''
             script=${example}/bin/pi-example
             test -x "$script"
@@ -392,6 +418,7 @@
             test "$(grep -Fc -- '--extension ${piPackage}' "$script")" -eq 1
             test "$(grep -Fc -- '--extension ${extensionOne}' "$script")" -eq 1
             test "$(grep -Fc -- '--extension ${extensionTwo}' "$script")" -eq 1
+            test "$(grep -Fc -- '--extension ${piExtension}' "$script")" -eq 1
             grep -F -- '--skill ${skill}' "$script"
             grep -F -- '--skill ${agentSkillsPiBundle}' "$script"
             ! grep -F -- '--skill ${agentSkillsBundle}' "$script"
@@ -426,6 +453,7 @@
 
             "$script" --help > "$TMPDIR/help" 2>&1
             grep -F -- '--wrapper-smoke-package-loaded' "$TMPDIR/help"
+            grep -F -- '--wrapper-smoke-nix-extension-loaded' "$TMPDIR/help"
             resources="$($script --print /wrapper-smoke-resources 2>&1)"
             printf '%s\n' "$resources" > "$TMPDIR/resources"
             grep -Fx -- 'wrapper-smoke-skill-loaded=true' "$TMPDIR/resources"
