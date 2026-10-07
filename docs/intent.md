@@ -19,7 +19,7 @@ being established.
 
 1. Model Pi's configuration primitives declaratively, including extensions,
    Pi package roots, skills, prompt templates, themes, system-prompt additions,
-   and eventually the files in Pi's agent directory.
+   and explicitly owned files in Pi's agent directory.
 2. Build wrappers that carry immutable extensions and other resources in their
    Nix closure.
 3. Allow one Pi wrapper configuration to extend another without creating nested
@@ -81,16 +81,33 @@ A file passed to `--append-system-prompt` is not semantically identical to an
 precedence, and `AGENTS.override.md` behavior. The public API should not call an
 appended prompt an `AGENTS.md` installation.
 
-A future managed-state layer must state ownership per file rather than hide
-several behaviors behind one vague option:
+The managed-state layer states ownership per file rather than hiding several
+behaviors behind one vague option:
 
 - **seed**: create a file only when it does not exist;
-- **merge**: preserve mutable content while reasserting declarative keys;
+- **merge** (deferred): preserve mutable content while reasserting declarative keys;
 - **enforce**: replace the complete file with the declarative version.
 
-Any runtime reconciler must use atomic writes and define malformed-JSON,
-permissions, concurrency, and precedence behavior. Authentication remains
-outside declarative Nix data.
+`extraConfigFiles` implements `seed` (default) and `enforce` with atomic,
+writable file copies. `text` contributions concatenate through `lib.types.lines`;
+`json` contributions compose through `pkgs.formats.json`; `source` selects one
+file copied verbatim. There is no runtime JSON or Markdown merge, no copying of
+context from other directories, and no automatic deletion of removed declarations.
+Authentication remains outside declarative Nix data.
+
+Installation runs before every invocation, after environment setup and before
+subcommand dispatch, following the effective agent directory. Seed preserves any
+existing entry and permissions, including malformed JSON and dangling symlinks.
+Enforce replaces regular files in full, including malformed JSON, and refuses
+symlinks or non-regular destinations. Symlinked parents within the agent directory
+are refused; the root may itself be a symlink. New/replaced files are mode `0600`.
+
+Atomic publication is per file, not transactional across all declarations.
+Concurrent seeds never overwrite an existing entry; concurrent enforcements use
+last-replacement-wins semantics without locking against Pi or extension writers.
+Errors stop startup, but earlier installations can remain. The agent directory
+must be trusted user-owned state; concurrent hostile directory changes are not a
+supported security boundary. With no declarations, no installer is invoked.
 
 ## Proposed public API
 
@@ -257,8 +274,13 @@ Findings from Pi 1.0.0 that constrain the remaining decisions:
   lock and patches only Nix-owned keys can therefore coexist with Pi's own
   writes.
 
-The recommended boundary is to complete Milestone 1 before adding a runtime
-state reconciler. This remains a product decision until explicitly approved.
+Implemented: an opt-in `extraConfigFiles` layer with `text`, `json`, and `source`
+inputs and explicit `seed` / `enforce` ownership. Its checks cover composition,
+permissions, malformed files, path validation, symlinks, startup failure, and
+concurrent launches. Enforce owns the whole file and does not acquire Pi's
+settings lock; it is not a preservation mechanism for mutable settings. A future
+key-level JSON merge must coordinate with Pi's own writers before it can claim
+to preserve concurrent updates.
 
 ### Milestone 3: package registry
 
@@ -335,8 +357,9 @@ demonstrating why per-file policy must be explicit.
 - **Custom tools backed by Nix executables.** A generated extension could
   register model-callable tools that execute a Nix-provided binary, beyond
   putting executables on `PATH`.
-- **Agent directory.** A static or managed agent directory could replace many
-  injected flags; see Milestone 2.
+- **Agent directory.** `extraConfigFiles` supports seeded/enforced writable files.
+  Key-level runtime JSON merging and managed Markdown blocks remain deferred;
+  see Milestone 2. Resource flags remain independent of managed files.
 
 Primary references:
 

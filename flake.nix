@@ -352,6 +352,10 @@
         {
           inherit (self.packages.${system}) pi;
 
+          extra-config-files = import ./tests/extra-config-files.nix {
+            inherit pkgs lib wrapper;
+          };
+
           pi-package =
             pkgs.runCommand "pi-wrapper-package-helper-test" { nativeBuildInputs = [ pkgs.jq ]; }
               ''
